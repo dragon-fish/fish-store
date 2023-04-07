@@ -2,6 +2,11 @@
   "name": "fish-store",
   "version": "1.0.0",
   "description": "Fish's memory is only 7 seconds - localStorage based Object storage with auto cache time",
+  "author": "Dragon-Fish <dragon-fish@qq.com>",
+  "files": [
+    "lib",
+    "dist"
+  ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "browser": "dist/index.umd.js",
@@ -12,13 +17,20 @@
     "build:node": "tsc",
     "build:browser": "vite build"
   },
+  "license": "MIT",
+  "homepage": "https://github.com/dragon-fish/fish-store",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dragon-fish/fish-store.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dragon-fish/fish-store/issues"
+  },
   "keywords": [
     "local-storage",
     "object-cache",
     "object-storage"
   ],
-  "author": "Dragon-Fish <dragon-fish@qq.com>",
-  "license": "MIT",
   "devDependencies": {
     "@types/node": "^18.15.11",
     "npm-run-all": "^4.1.5",
