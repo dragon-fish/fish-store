@@ -1,6 +1,6 @@
 {
   "name": "fish-store",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fish's memory is only 7 seconds - localStorage based Object storage with auto cache time",
   "author": "Dragon-Fish <dragon-fish@qq.com>",
   "files": [
