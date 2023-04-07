@@ -1,0 +1,34 @@
+{
+  "name": "fish-store",
+  "version": "1.0.0",
+  "description": "Fish's memory is only 7 seconds - localStorage based Object storage with auto cache time",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "browser": "dist/index.umd.js",
+  "scripts": {
+    "dev": "vite",
+    "clear": "rimraf dist lib",
+    "build": "npm run clear && run-p build:node build:browser",
+    "build:node": "tsc",
+    "build:browser": "vite build"
+  },
+  "keywords": [
+    "local-storage",
+    "object-cache",
+    "object-storage"
+  ],
+  "author": "Dragon-Fish <dragon-fish@qq.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "npm-run-all": "^4.1.5",
+    "rimraf": "^4.4.1",
+    "tslib": "^2.5.0",
+    "typescript": "^5.0.3",
+    "vite": "^4.2.1",
+    "vite-plugin-dts": "^2.2.0"
+  },
+  "dependencies": {
+    "@vue/reactivity": "^3.2.47"
+  }
+}
