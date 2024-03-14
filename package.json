@@ -41,6 +41,7 @@
     "vite-plugin-dts": "^2.2.0"
   },
   "dependencies": {
-    "@vue/reactivity": "^3.2.47"
+    "@vue/reactivity": "^3.2.47",
+    "@vueuse/core": "^10.9.0"
   }
 }

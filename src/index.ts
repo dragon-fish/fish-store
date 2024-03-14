@@ -6,74 +6,72 @@
  * @license MIT
  */
 
-import { type Ref, shallowRef, effect } from '@vue/reactivity'
+import { type ComputedRef, type Ref, computed } from '@vue/reactivity'
+import { useStorage, type RemovableRef, useNow } from '@vueuse/core'
 
 export class FishStore<T extends unknown = {}> {
   readonly #STORAGE_KEY_DATA: string
   readonly #STORAGE_KEY_TIME: string
-  readonly #valueRef: Ref<T | null>
+  readonly #dataStore: RemovableRef<T>
+  readonly #timeStore: RemovableRef<number>
+  #time = useNow()
+  isExpired: ComputedRef<boolean>
 
-  constructor(readonly name: string, readonly maxAge = 7e3) {
+  /**
+   * @param name Storage name
+   * @param maxAge Max cache time in ms, default `Infinity`, that means never expired.
+   *               Please note that any false value will be treated as `Infinity`.
+   */
+  constructor(readonly name: string, readonly maxAge: number = Infinity) {
     if (!name) throw new Error('FishStore require a name')
+
     this.#STORAGE_KEY_DATA = `${name}/data`
     this.#STORAGE_KEY_TIME = `${name}/time`
 
-    // Don't delete this temporary variable
-    // effect will be triggered once each instance is created
-    // We need to reset the cache time
-    const _cacheTime = this.cacheTime
-    this.#valueRef = shallowRef(this.getItem(true))
-    effect(() => {
-      this.setItem(this.#valueRef.value!)
+    this.#dataStore = useStorage<T>(this.#STORAGE_KEY_DATA, null)
+    this.#timeStore = useStorage<number>(this.#STORAGE_KEY_TIME, 0)
+
+    this.isExpired = computed(() => {
+      if (!this.maxAge || this.maxAge === Infinity) return false
+      console.info(this.timeNow, this.lastUpdated, this.maxAge)
+      return this.#time.value.getTime() >= this.#timeStore.value + this.maxAge
     })
-    localStorage.setItem(this.#STORAGE_KEY_TIME, '' + _cacheTime)
+  }
+
+  get value() {
+    return this.getItem()
+  }
+  set value(payload: T | null) {
+    this.setItem(payload as T)
   }
 
   // Methods
   getItem(force?: boolean): T | null {
-    if (this.isExpired && !force) {
+    if (this.isExpired.value && !force) {
       return null
     }
-    const raw = this.rawData
-    if (!raw) return null
-    try {
-      return JSON.parse(raw)
-    } catch (e) {
-      return null
-    }
+    return this.#dataStore.value
   }
   setItem(data: T) {
-    localStorage.setItem(this.#STORAGE_KEY_DATA, JSON.stringify(data))
-    localStorage.setItem(this.#STORAGE_KEY_TIME, '' + Date.now())
+    this.#dataStore.value = data
+    this.#timeStore.value = this.#time.value.getTime()
     return this
   }
   removeItem() {
-    localStorage.removeItem(this.#STORAGE_KEY_DATA)
-    localStorage.removeItem(this.#STORAGE_KEY_TIME)
+    this.#dataStore.value = null
+    this.#timeStore.value = 0
     return this
   }
 
-  // Reactivity sugar
-  get value() {
-    if (this.isExpired) {
-      return null
-    }
-    return this.#valueRef.value
-  }
-  set value(data: T | null) {
-    this.#valueRef.value = data
-  }
-
   // Getters
-  get rawData() {
-    return localStorage.getItem(this.#STORAGE_KEY_DATA)
+  get rawValue() {
+    return this.#dataStore.value
   }
-  get cacheTime() {
-    const time = +(localStorage.getItem(this.#STORAGE_KEY_TIME) || '0')
-    return isNaN(time) ? 0 : time
+  get lastUpdated() {
+    return this.#timeStore.value
   }
-  get isExpired() {
-    return Date.now() >= this.cacheTime + this.maxAge
+  get timeNow() {
+    return this.#time.value.getTime()
   }
 }
 
