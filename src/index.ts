@@ -6,15 +6,15 @@
  * @license MIT
  */
 
-import { type ComputedRef, type Ref, computed } from '@vue/reactivity'
-import { useStorage, type RemovableRef, useNow } from '@vueuse/core'
+import { type ComputedRef, computed, ref } from '@vue/reactivity'
+import { useStorage, type RemovableRef } from '@vueuse/core'
 
 export class FishStore<T extends unknown = {}> {
   readonly #STORAGE_KEY_DATA: string
   readonly #STORAGE_KEY_TIME: string
   readonly #dataStore: RemovableRef<T>
   readonly #timeStore: RemovableRef<number>
-  #time = useNow()
+  #timeNow = ref(Date.now())
   isExpired: ComputedRef<boolean>
 
   /**
@@ -33,9 +33,11 @@ export class FishStore<T extends unknown = {}> {
 
     this.isExpired = computed(() => {
       if (!this.maxAge || this.maxAge === Infinity) return false
-      console.info(this.timeNow, this.lastUpdated, this.maxAge)
-      return this.#time.value.getTime() >= this.#timeStore.value + this.maxAge
+      return this.#timeNow.value >= this.#timeStore.value + this.maxAge
     })
+    setInterval(() => {
+      this.#timeNow.value = Date.now()
+    }, 100)
   }
 
   get value() {
@@ -54,7 +56,7 @@ export class FishStore<T extends unknown = {}> {
   }
   setItem(data: T) {
     this.#dataStore.value = data
-    this.#timeStore.value = this.#time.value.getTime()
+    this.#timeStore.value = Date.now()
     return this
   }
   removeItem() {
@@ -67,11 +69,8 @@ export class FishStore<T extends unknown = {}> {
   get rawValue() {
     return this.#dataStore.value
   }
-  get lastUpdated() {
+  get updateTime() {
     return this.#timeStore.value
-  }
-  get timeNow() {
-    return this.#time.value.getTime()
   }
 }
 
