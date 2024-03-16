@@ -7,15 +7,17 @@
  */
 
 import { type ComputedRef, computed, ref } from '@vue/reactivity'
-import { useStorage, RemovableRef } from './useStorage'
+import { useInterval } from './utils/useInterval'
+import { useStorage, type RemovableRef } from './utils/useStorage'
 
 export class FishStore<T extends unknown = {}> {
   readonly #STORAGE_KEY_DATA: string
   readonly #STORAGE_KEY_TIME: string
   readonly #dataStore: RemovableRef<T>
   readonly #timeStore: RemovableRef<number>
-  #timeNow = ref(Date.now())
-  isExpired: ComputedRef<boolean>
+  readonly #isExpired: ComputedRef<boolean>
+  readonly #timeNow = ref(Date.now())
+  readonly #stopInterval: () => void
 
   /**
    * @param name Storage name
@@ -31,13 +33,14 @@ export class FishStore<T extends unknown = {}> {
     this.#dataStore = useStorage<T>(this.#STORAGE_KEY_DATA, null as T)
     this.#timeStore = useStorage<number>(this.#STORAGE_KEY_TIME, 0)
 
-    this.isExpired = computed(() => {
+    this.#isExpired = computed(() => {
       if (!this.maxAge || this.maxAge === Infinity) return false
       return this.#timeNow.value >= this.#timeStore.value + this.maxAge
     })
-    setInterval(() => {
+
+    this.#stopInterval = useInterval(() => {
       this.#timeNow.value = Date.now()
-    }, 100)
+    })
   }
 
   get value() {
@@ -48,21 +51,47 @@ export class FishStore<T extends unknown = {}> {
   }
 
   // Methods
+  /**
+   * Get the data from the store
+   * @param force Force to get the data from the store, ignore the cache time
+   * @returns
+   * - `null` if the data is expired and `force` is `false`
+   * - `T` if the data is not expired or `force` is `true`
+   */
   getItem(force?: boolean): T | null {
-    if (this.isExpired.value && !force) {
+    if (this.#isExpired.value && !force) {
       return null
     }
     return this.#dataStore.value
   }
+  /**
+   * Set the data to the store
+   * @param data Data to be stored
+   * @returns `this`
+   */
   setItem(data: T) {
     this.#dataStore.value = data
     this.#timeStore.value = Date.now()
     return this
   }
+  /**
+   * Remove the data from the store
+   * @returns `this`
+   */
   removeItem() {
     this.#dataStore.value = null as T
     this.#timeStore.value = 0
     return this
+  }
+
+  /**
+   * Destroy the FishStore instance, eliminate side effects
+   */
+  destroy() {
+    this.#stopInterval()
+    for (let prop in this) {
+      Reflect.has(this, prop) && Reflect.deleteProperty(this, prop)
+    }
   }
 
   // Getters
@@ -71,6 +100,9 @@ export class FishStore<T extends unknown = {}> {
   }
   get updateTime() {
     return this.#timeStore.value
+  }
+  get isExpired() {
+    return this.#isExpired.value
   }
 }
 
