@@ -7,7 +7,7 @@
  */
 
 import { type ComputedRef, computed, ref } from '@vue/reactivity'
-import { useStorage, type RemovableRef } from '@vueuse/core'
+import { useStorage, RemovableRef } from './useStorage'
 
 export class FishStore<T extends unknown = {}> {
   readonly #STORAGE_KEY_DATA: string
@@ -28,7 +28,7 @@ export class FishStore<T extends unknown = {}> {
     this.#STORAGE_KEY_DATA = `${name}/data`
     this.#STORAGE_KEY_TIME = `${name}/time`
 
-    this.#dataStore = useStorage<T>(this.#STORAGE_KEY_DATA, null)
+    this.#dataStore = useStorage<T>(this.#STORAGE_KEY_DATA, null as T)
     this.#timeStore = useStorage<number>(this.#STORAGE_KEY_TIME, 0)
 
     this.isExpired = computed(() => {
@@ -60,7 +60,7 @@ export class FishStore<T extends unknown = {}> {
     return this
   }
   removeItem() {
-    this.#dataStore.value = null
+    this.#dataStore.value = null as T
     this.#timeStore.value = 0
     return this
   }
