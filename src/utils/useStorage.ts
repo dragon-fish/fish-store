@@ -55,6 +55,7 @@ export function useStorage<T>(name: string, initialVal?: T): RemovableRef<T> {
 
   Object.defineProperty(data, 'destroy', {
     value: () => {
+      paused.value = true
       storageListenerList.splice(
         storageListenerList.findIndex((i) => i.uuid === uuid),
         1
