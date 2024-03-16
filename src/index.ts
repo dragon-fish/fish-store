@@ -91,9 +91,14 @@ export class FishStore<T extends unknown = {}> {
     this.#dataStore.destroy()
     this.#timeStore.destroy()
     this.#stopInterval()
-    for (let prop in this) {
-      Reflect.has(this, prop) && Reflect.deleteProperty(this, prop)
-    }
+    const e = () => new Error('FishStore has been destroyed')
+    Object.defineProperties(this, {
+      getItem: { value: e },
+      setItem: { value: e },
+      removeItem: { value: e },
+      value: { get: e, set: e },
+      destroy: { value: e },
+    })
   }
 
   // Getters
