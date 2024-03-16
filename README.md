@@ -53,20 +53,20 @@ Or...why not ESM:
 ```ts
 import { FishStore } from 'fish-store'
 
-async function lookingMyWeel(): Fish[] {
-  const weel = new FishStore<Fish[]>('my-weel', 10 * 60 * 1000) // create a store with 10 minutes cache
-  const cache = weel.getItem() // or `const cache = weel.value`
-  if (cache) {
-    return cache
-  }
-  const fishes = await fishing()
-  weel.setCache(fishes) // or `weel.value = fishes`
-  return fishes
-}
-
 interface Fish {
   type: string
   kg: number
+}
+
+const weel = new FishStore<Fish[]>('my-weel', 10 * 60 * 1000) // create a store with 10 minutes cache
+async function lookingMyWeel(): Fish[] {
+  const cached = weel.getItem() // or `const cached = weel.value`
+  if (cached) {
+    return cached
+  }
+  const fishes = await fishing()
+  weel.setItem(fishes) // or `weel.value = fishes`
+  return fishes
 }
 ```
 
@@ -75,6 +75,10 @@ interface Fish {
 ### `new FishStore<T>(readonly name: string, readonly maxAge?: number)`
 
 Create a store with given `namespace` & `maxAge` (in millisecond, defaults to `7e3`).
+
+- `name`: the namespace of the store
+- `maxAge`: the max age of the cache
+  - `0`/`Infinity`: never expire
 
 **Sugar**
 
