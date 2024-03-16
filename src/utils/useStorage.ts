@@ -4,6 +4,18 @@ export interface RemovableRef<T> extends Ref<T> {
   destroy: () => void
 }
 
+const storageListenerList: {
+  uuid: string
+  key: string
+  listener: (e: StorageEvent) => void
+}[] = []
+window.addEventListener('storage', (e) => {
+  const key = e.key
+  storageListenerList
+    .filter((i) => i.key === key)
+    .forEach(({ listener }) => listener?.(e))
+})
+
 export function useStorage<T>(name: string, initialVal?: T): RemovableRef<T> {
   initialVal = initialVal === undefined ? (null as T) : initialVal
   const data = ref() as Ref<T>
@@ -27,19 +39,26 @@ export function useStorage<T>(name: string, initialVal?: T): RemovableRef<T> {
     }
   })
 
-  const listener = (e: StorageEvent) => {
-    if (paused.value) return
-    if (e.key === name) {
-      paused.value = true
-      data.value = JSON.parse(e.newValue || 'null')
-      paused.value = false
-    }
-  }
-  window.addEventListener('storage', listener)
+  const uuid = crypto.randomUUID()
+  storageListenerList.push({
+    uuid,
+    key: name,
+    listener: (e: StorageEvent) => {
+      if (paused.value) return
+      if (e.key === name) {
+        paused.value = true
+        data.value = JSON.parse(e.newValue || 'null')
+        paused.value = false
+      }
+    },
+  })
 
   Object.defineProperty(data, 'destroy', {
     value: () => {
-      window.removeEventListener('storage', listener)
+      storageListenerList.splice(
+        storageListenerList.findIndex((i) => i.uuid === uuid),
+        1
+      )
     },
   })
 

@@ -88,6 +88,8 @@ export class FishStore<T extends unknown = {}> {
    * Destroy the FishStore instance, eliminate side effects
    */
   destroy() {
+    this.#dataStore.destroy()
+    this.#timeStore.destroy()
     this.#stopInterval()
     for (let prop in this) {
       Reflect.has(this, prop) && Reflect.deleteProperty(this, prop)
