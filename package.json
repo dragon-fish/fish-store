@@ -7,7 +7,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "unbuild",
-    "postinstall": "playwright install",
+    "playwright:install": "playwright install",
+    "playwright:install-with-deps": "playwright install --with-deps",
     "test": "run-p test:*",
     "test:node": "cross-env VITEST_BROWSER=0 vitest run",
     "test:browser": "cross-env VITEST_BROWSER=1 vitest run",

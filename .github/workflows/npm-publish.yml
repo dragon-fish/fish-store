@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NPM_CONFIG_PROVENANCE: true
-      NPM_TAG: ${{ inputs.npm_tag || 'latest' }}
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,14 +48,17 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org/
 
-      - name: get-npm-version
-        id: package-version
-        uses: martinbeentjes/npm-get-version-action@v1.3.1
+      - name: Read package version
+        id: npm-version
+        working-directory: .
+        run: |
+          PKG_VERSION=$(jq -r '.version' package.json)
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check version
         shell: bash
         run: |
-          PKG_VERSION="${{ steps.package-version.outputs.current-version }}"
+          PKG_VERSION="${{ steps.npm-version.outputs.version }}"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ "${{ inputs.version }}" != "$PKG_VERSION" ]]; then
@@ -72,8 +75,23 @@ jobs:
             fi
           fi
 
+      - name: Resolve npm dist-tag
+        id: npm-tag
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ inputs.npm_tag }}" ]]; then
+            TAG='${{ inputs.npm_tag }}'
+          else
+            TAG='latest'
+          fi
+
+          echo "tag=$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers and OS deps
+        run: pnpm run playwright:install-with-deps
 
       - name: Build
         run: pnpm build
@@ -82,4 +100,7 @@ jobs:
         run: pnpm test
 
       - name: Publish
-        run: pnpm publish --no-git-checks --tag "$NPM_TAG"
+        run: |
+          pnpm publish \
+          --no-git-checks \
+          --tag '${{ steps.npm-tag.outputs.tag }}'
