@@ -1,6 +1,6 @@
 {
   "name": "fish-store",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Fish's memory is only 7 seconds - Universal storage managers with auto expiration support",
   "type": "module",
   "main": "dist/index.mjs",
