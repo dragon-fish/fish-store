@@ -1,47 +1,71 @@
 {
   "name": "fish-store",
-  "version": "1.0.1",
-  "description": "Fish's memory is only 7 seconds - localStorage based Object storage with auto cache time",
-  "author": "Dragon-Fish <dragon-fish@qq.com>",
+  "version": "1.0.0",
+  "description": "Fish's memory is only 7 seconds - Universal storage managers with auto expiration support",
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "unbuild",
+    "postinstall": "playwright install",
+    "test": "run-p test:*",
+    "test:node": "cross-env VITEST_BROWSER=0 vitest run",
+    "test:browser": "cross-env VITEST_BROWSER=1 vitest run",
+    "test:browser:chromium": "cross-env VITEST_BROWSER=1 VITEST_BROWSERS=chromium vitest run",
+    "test:browser:firefox": "cross-env VITEST_BROWSER=1 VITEST_BROWSERS=firefox vitest run",
+    "test:browser:webkit": "cross-env VITEST_BROWSER=1 VITEST_BROWSERS=webkit vitest run"
+  },
   "files": [
-    "lib",
     "dist"
   ],
-  "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "browser": "dist/index.umd.js",
-  "scripts": {
-    "dev": "vite",
-    "clear": "rimraf dist lib",
-    "build": "npm run clear && run-p build:node build:browser",
-    "build:node": "tsc",
-    "build:browser": "vite build"
-  },
-  "license": "MIT",
-  "homepage": "https://github.com/dragon-fish/fish-store",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/dragon-fish/fish-store.git"
-  },
-  "bugs": {
-    "url": "https://github.com/dragon-fish/fish-store/issues"
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./types": {
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.cjs"
+    },
+    "./adapters/IDBFishStore": {
+      "import": "./dist/adapters/IDBFishStore.mjs",
+      "require": "./dist/adapters/IDBFishStore.cjs"
+    },
+    "./adapters/ClassicStorageFishStore": {
+      "import": "./dist/adapters/ClassicStorageFishStore.mjs",
+      "require": "./dist/adapters/ClassicStorageFishStore.cjs"
+    },
+    "./models/MemoryStorage": {
+      "import": "./dist/models/MemoryStorage.mjs",
+      "require": "./dist/models/MemoryStorage.cjs"
+    }
   },
   "keywords": [
-    "local-storage",
-    "object-cache",
-    "object-storage"
+    "fish-store",
+    "store",
+    "database",
+    "db",
+    "localstorage",
+    "storage",
+    "indexeddb",
+    "idb",
+    "kv",
+    "map"
   ],
-  "devDependencies": {
-    "@types/node": "^20.11.28",
-    "npm-run-all": "^4.1.5",
-    "rimraf": "^5.0.5",
-    "tslib": "^2.6.2",
-    "typescript": "^5.4.2",
-    "vite": "^5.1.6",
-    "vite-plugin-dts": "^3.7.3"
-  },
+  "author": "dragon-fish <dragon-fish@qq.com>",
+  "license": "MIT",
+  "packageManager": "pnpm@10.8.1",
   "dependencies": {
-    "@vue/reactivity": "^3.4.21"
+    "idb-plus": "^0.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "@vitest/browser-playwright": "^4.0.18",
+    "cross-env": "^10.1.0",
+    "npm-run-all2": "^8.0.4",
+    "playwright": "^1.58.0",
+    "unbuild": "^3.6.1",
+    "vitest": "^4.0.18"
   }
 }

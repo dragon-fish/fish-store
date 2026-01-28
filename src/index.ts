@@ -1,120 +1,71 @@
-/**
- * FishStore - Fish's memory is only 7 seconds
- * @desc localStorage based Object storage with auto cache time
- *
- * @author Dragon-Fish <dragon-fish@qq.com>
- * @license MIT
- */
+import { IFishStore } from './types.js'
+import { IDBFishStore } from './adapters/IDBFishStore.js'
+import { ClassicStorageFishStore } from './adapters/ClassicStorageFishStore.js'
 
-import { type ComputedRef, computed, ref } from '@vue/reactivity'
-import { useInterval } from './utils/useInterval'
-import { useStorage, type RemovableRef } from './utils/useStorage'
+export type FishStoreEngineName =
+  | 'indexedDB'
+  | 'localStorage'
+  | 'sessionStorage'
+  | 'memory'
 
-export class FishStore<T extends unknown = {}> {
-  readonly #STORAGE_KEY_DATA: string
-  readonly #STORAGE_KEY_TIME: string
-  readonly #dataStore: RemovableRef<T>
-  readonly #timeStore: RemovableRef<number>
-  readonly #isExpired: ComputedRef<boolean>
-  readonly #timeNow = ref(Date.now())
-  readonly #stopInterval: () => void
+function canUseIDB() {
+  return (
+    typeof window !== 'undefined' &&
+    'indexedDB' in window &&
+    window.indexedDB !== null
+  )
+}
+function canUseLocalStorage() {
+  return (
+    typeof window !== 'undefined' &&
+    'localStorage' in window &&
+    window.localStorage !== null
+  )
+}
 
-  /**
-   * @param name Storage name
-   * @param maxAge Max cache time in ms, default `Infinity`, that means never expired.
-   *               Please note that any false value will be treated as `Infinity`.
-   */
-  constructor(readonly name: string, readonly maxAge: number = Infinity) {
-    if (!name) throw new Error('FishStore require a name')
+const warning = (...args: any[]) => {
+  ;(globalThis as any)[''.concat('console')]['warn'](...args)
+}
 
-    this.#STORAGE_KEY_DATA = `${name}/data`
-    this.#STORAGE_KEY_TIME = `${name}/time`
-
-    this.#dataStore = useStorage<T>(this.#STORAGE_KEY_DATA, null as T)
-    this.#timeStore = useStorage<number>(this.#STORAGE_KEY_TIME, 0)
-
-    this.#isExpired = computed(() => {
-      if (!this.maxAge || this.maxAge === Infinity) return false
-      return this.#timeNow.value >= this.#timeStore.value + this.maxAge
-    })
-
-    this.#stopInterval = useInterval(() => {
-      this.#timeNow.value = Date.now()
-    })
+export function createFishStore<T = any>(
+  dbName: string,
+  storeName: string,
+  ttl?: number,
+  version?: number | string,
+  engine: FishStoreEngineName = 'indexedDB'
+): IFishStore<T> {
+  if (engine === 'indexedDB' && !canUseIDB()) {
+    warning(`indexedDB is not supported, falling back to localStorage`)
+    engine = 'localStorage'
   }
-
-  get value() {
-    return this.getItem()
+  if (
+    ['localStorage', 'sessionStorage'].includes(engine) &&
+    !canUseLocalStorage()
+  ) {
+    warning(
+      `${engine} is not supported in this environment, falling back to memory`
+    )
+    engine = 'memory'
   }
-  set value(payload: T | null) {
-    this.setItem(payload as T)
-  }
-
-  // Methods
-  /**
-   * Get the data from the store
-   * @param force Force to get the data from the store, ignore the cache time
-   * @returns
-   * - `null` if the data is expired and `force` is `false`
-   * - `T` if the data is not expired or `force` is `true`
-   */
-  getItem(force?: boolean): T | null {
-    if (this.#isExpired.value && !force) {
-      return null
-    }
-    return this.#dataStore.value
-  }
-  /**
-   * Set the data to the store
-   * @param data Data to be stored
-   * @returns `this`
-   */
-  setItem(data: T) {
-    this.#dataStore.value = data
-    this.#timeStore.value = Date.now()
-    return this
-  }
-  /**
-   * Remove the data from the store
-   * @returns `this`
-   */
-  removeItem() {
-    this.#dataStore.value = null as T
-    this.#timeStore.value = 0
-    return this
-  }
-
-  /**
-   * Destroy the FishStore instance, eliminate side effects
-   */
-  destroy() {
-    this.#dataStore.destroy()
-    this.#timeStore.destroy()
-    this.#stopInterval()
-    const e = () => new Error('FishStore has been destroyed')
-    Object.defineProperties(this, {
-      getItem: { value: e },
-      setItem: { value: e },
-      removeItem: { value: e },
-      value: { get: e, set: e },
-      destroy: { value: e },
-    })
-  }
-
-  // Getters
-  get rawValue() {
-    return this.#dataStore.value
-  }
-  get updateTime() {
-    return this.#timeStore.value
-  }
-  get isExpired() {
-    return this.#isExpired.value
+  switch (engine) {
+    case 'indexedDB':
+      return new IDBFishStore<T>(dbName, storeName, ttl, version)
+    case 'localStorage':
+    case 'sessionStorage':
+    case 'memory':
+      return new ClassicStorageFishStore<T>(
+        dbName,
+        storeName,
+        ttl,
+        version,
+        engine
+      )
+    default:
+      throw new Error(`Unsupported storage engine: ${engine}`)
   }
 }
 
-export function createWeel(name: string, maxAge = 7e3) {
-  return new FishStore(name, maxAge)
-}
-
-export { createWeel as createStore }
+export type * from './types.js'
+export * from './adapters/IDBFishStore.js'
+export * from './adapters/ClassicStorageFishStore.js'
+export * from './models/MemoryStorage.js'

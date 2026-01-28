@@ -129,4 +129,5 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-lib
+# fuck you macOS
+.DS_Store
