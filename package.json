@@ -56,6 +56,10 @@
   ],
   "author": "dragon-fish <dragon-fish@qq.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dragon-fish/fish-store"
+  },
   "packageManager": "pnpm@10.8.1",
   "dependencies": {
     "idb-plus": "^0.2.0"
