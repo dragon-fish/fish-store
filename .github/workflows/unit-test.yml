@@ -1,4 +1,4 @@
-name: Unit test for Fexios
+name: Unit test
 on:
   push:
     branches: [master, dev, actions]
