@@ -1,11 +1,9 @@
 import { IDBPlus } from 'idb-plus'
-import { IFishStore as IFishStore, IFishStoreEntry } from '../types.js'
+import { IFishStoreEntry } from '../types.js'
+import { AbstractFishStore } from './AbstractFishStore.js'
 
-export class IDBFishStore<T = unknown> implements IFishStore<T> {
+export class IDBFishStore<T = unknown> extends AbstractFishStore<T> {
   readonly db: IDBPlus<string, IFishStoreEntry<T>>
-  keys: () => AsyncIterable<string>
-  values: () => AsyncIterable<IFishStoreEntry<T>>
-  entries: () => AsyncIterable<[string, IFishStoreEntry<T>]>
 
   constructor(
     readonly dbName: string,
@@ -13,151 +11,58 @@ export class IDBFishStore<T = unknown> implements IFishStore<T> {
     public ttl: number = Infinity,
     public version?: number | string
   ) {
+    super(dbName, storeName, ttl, version)
     this.db = new IDBPlus<string, IFishStoreEntry<T>>(dbName, storeName)
-    this.keys = this.db.keys.bind(this.db)
-    this.values = this.db.values.bind(this.db)
-    this.entries = this.db.entries.bind(this.db)
-    if (typeof this.ttl !== 'number') {
-      this.ttl = Number(this.ttl)
-    }
-    if (isNaN(this.ttl) || this.ttl <= 0) {
-      this.ttl = Infinity
-    }
-    this._clearExpiredEntries().catch(() => {})
   }
 
-  private async _clearExpiredEntries() {
-    if (this.ttl === Infinity) return
-    const now = Date.now()
-    const toDelete: string[] = []
-    for await (const [key, entry] of this.db.entries()) {
-      if (typeof entry.time === 'number' && now - entry.time > this.ttl) {
-        toDelete.push(key)
-      }
-    }
-    if (toDelete.length > 0) {
-      await this.db.deleteMany(toDelete)
-    }
-  }
-
-  async get(key: string, ttl = this.ttl, setter?: () => Promise<T> | T): Promise<T | null> {
-    const data = await this.loadFromDB(key)
-    const isExpired = this.checkIfExpired(data, ttl)
-    if (!data || isExpired) {
-      if (typeof setter === 'function') {
-        const newData = await setter()
-        await this.set(key, newData as T)
-        return newData as T
-      }
-      return null
-    }
-    return data.value
-  }
-
-  set(key: string, value: null | undefined): Promise<void>
-  set(key: string, value: T): Promise<IFishStoreEntry<T>>
-  set(
-    record: Record<string, T | null | undefined>
-  ): Promise<Record<string, IFishStoreEntry<T> | void>>
-  async set(
-    keyOrRecord: string | Record<string, T | null | undefined>,
-    maybeValue?: T | null | undefined
-  ): Promise<IFishStoreEntry<T> | void | Record<string, IFishStoreEntry<T> | void>> {
-    const now = Date.now()
-
-    // Overload 1: set(key, value)
-    if (typeof keyOrRecord === 'string') {
-      const key = keyOrRecord
-      const value = maybeValue as T | null | undefined
-      if (value === null || typeof value === 'undefined') {
-        return this.delete(key)
-      }
-      const record: IFishStoreEntry<T> = {
-        time: now,
-        value,
-        version: this.version,
-      }
-      await this.db.set(key, record)
-      return record
-    }
-
-    // Overload 2: set(record)
-    const recordObject = keyOrRecord as Record<string, T | null | undefined>
-    const toSet: Array<[string, IFishStoreEntry<T>]> = []
-    const toDelete: Array<string> = []
-    const results: Record<string, IFishStoreEntry<T> | void> = {}
-
-    for (const [key, value] of Object.entries(recordObject)) {
-      if (value === null || typeof value === 'undefined') {
-        toDelete.push(key)
-      } else {
-        const rec: IFishStoreEntry<T> = { time: now, value: value as T, version: this.version }
-        toSet.push([key, rec])
-        results[key] = rec
-      }
-    }
-
-    if (toSet.length > 0) {
-      await this.db.setMany(toSet)
-    }
-    if (toDelete.length > 0) {
-      await this.db.deleteMany(toDelete)
-    }
-    return results
-  }
-
-  async has(key: string, ttl = this.ttl): Promise<boolean> {
-    const data = await this.loadFromDB(key)
-    const isExpired = this.checkIfExpired(data, ttl)
-    return data !== null && !isExpired
-  }
-
-  async delete(key: string): Promise<void> {
-    await this.db.delete(key)
-  }
-
-  async updatedAt(key: string): Promise<number> {
-    const data = await this.loadFromDB(key)
-    return data ? data.time : 0
-  }
-
-  private async loadFromDB(key: string) {
+  protected async loadEntry(key: string): Promise<IFishStoreEntry<T> | null> {
     const data = await this.db.get(key)
-    // Not exist
-    if (data === void 0) {
-      return null
-    }
-    // Bad data
+    if (data === void 0) return null
+    // Structural checks
     if (typeof data.time !== 'number' || typeof data.value === 'undefined') {
       try {
-        await this.delete(key)
-      } catch (_) {}
-      return null
-    }
-    // Version mismatch
-    if (
-      typeof this.version !== 'undefined' &&
-      typeof this.version !== 'undefined' &&
-      data.version !== this.version
-    ) {
-      try {
-        await this.delete(key)
+        await this.removeEntry(key)
       } catch (_) {}
       return null
     }
     return data
   }
 
-  private checkIfExpired(data: IFishStoreEntry<T> | null, ttl = this.ttl) {
-    if (!data) return false
-    return Date.now() - data.time > ttl
+  protected async saveEntry(
+    key: string,
+    entry: IFishStoreEntry<T>
+  ): Promise<void> {
+    await this.db.set(key, entry)
   }
 
-  /**
-   * [DANGER] Use with caution!
-   * Delete all data from the database.
-   */
-  async clear() {
+  protected async removeEntry(key: string): Promise<void> {
+    await this.db.delete(key)
+  }
+
+  protected async saveEntries(
+    entries: [string, IFishStoreEntry<T>][]
+  ): Promise<void> {
+    await this.db.setMany(entries)
+  }
+
+  protected async removeEntries(keys: string[]): Promise<void> {
+    await this.db.deleteMany(keys)
+  }
+
+  async *rawKeys(): AsyncIterable<string> {
+    for await (const key of this.db.keys()) {
+      yield key
+    }
+  }
+
+  async *rawEntries(): AsyncIterable<[string, IFishStoreEntry<T>]> {
+    for await (const [key, entry] of this.db.entries()) {
+      yield [key, entry]
+    }
+  }
+
+  async clear(): Promise<this> {
+    this.cache?.clear()
     await this.db.clear()
     return this
   }

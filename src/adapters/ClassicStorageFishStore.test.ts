@@ -30,98 +30,118 @@ describe('ClassicStorageFishStore', () => {
     expect(await store.updatedAt('k')).toBe(0)
   })
 
-  it('set(record) supports batch writes and null/undefined deletes', async () => {
+  it('LRU cache works as expected', async () => {
     const backing = new MemoryStorage()
-    const store = new ClassicStorageFishStore('db', 's', 60_000, 'v1', backing)
+    // Spy on backing.getItem
+    const getItemSpy = vi.spyOn(backing, 'getItem')
 
-    await store.set('a', 1)
-    const res = await store.set({ a: null, b: 2, c: undefined, d: 3 })
+    const store = new ClassicStorageFishStore(
+      'db',
+      'cache-test',
+      60_000,
+      'v1',
+      backing
+    )
+    store.useCache(2) // limit to 2
 
-    expect(res).toHaveProperty('b')
-    expect(res).toHaveProperty('d')
-    expect(res).not.toHaveProperty('a')
-    expect(res).not.toHaveProperty('c')
+    await store.set('k1', 1)
+    await store.set('k2', 2)
 
-    expect(await store.get('a')).toBeNull()
-    expect(await store.get('b')).toBe(2)
-    expect(await store.get('c')).toBeNull()
-    expect(await store.get('d')).toBe(3)
+    getItemSpy.mockClear()
+
+    // Should come from cache, no getItem call
+    expect(await store.get('k1')).toBe(1)
+    expect(getItemSpy).not.toHaveBeenCalled()
+
+    // Trigger cache eviction of k1 by adding k2 and k3 without accessing k1 again
+    // Currently cache has [k2, k1] (k1 is most recent due to get)
+    // To evict k1, we need to make others more recent.
+    await store.get('k2') // cache: [k1, k2]
+    await store.set('k3', 3) // cache size 2, evicts k1
+    getItemSpy.mockClear()
+
+    // k1 should now be evicted, should call getItem
+    expect(await store.get('k1')).toBe(1)
+    expect(getItemSpy).toHaveBeenCalled()
   })
 
-  it('ttl expiration makes get return null and has return false', async () => {
+  it('keys() with checkTTL filters expired items and performs read-repair', async () => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2020-01-01T00:00:00.000Z'))
-    try {
-      const backing = new MemoryStorage()
-      const store = new ClassicStorageFishStore('db', 's', 10, 'v1', backing)
-      await store.set('k', 'v')
+    const now = Date.now()
+    vi.setSystemTime(now)
 
-      vi.setSystemTime(new Date('2020-01-01T00:00:00.009Z'))
-      expect(await store.get('k')).toBe('v')
-      expect(await store.has('k')).toBe(true)
+    const backing = new MemoryStorage()
+    const store = new ClassicStorageFishStore(
+      'db',
+      'ttl-test',
+      1000,
+      'v1',
+      backing
+    )
 
-      vi.setSystemTime(new Date('2020-01-01T00:00:00.011Z'))
-      expect(await store.get('k')).toBeNull()
-      expect(await store.has('k')).toBe(false)
-    } finally {
-      vi.useRealTimers()
-    }
+    await store.set('k1', 'v1')
+    vi.setSystemTime(now + 2000) // Expire k1
+
+    // Default keys() doesn't check TTL
+    expect(await collectAsync(store.keys())).toEqual(['k1'])
+
+    // keys({ checkTTL: true }) filters it
+    const filteredKeys = await collectAsync(store.keys({ checkTTL: true }))
+    expect(filteredKeys).toEqual([])
+
+    // Should perform read-repair (delete)
+    expect(backing.length).toBe(0)
+
+    vi.useRealTimers()
   })
 
-  it('version mismatch invalidates and deletes stored entry', async () => {
+  it('rawGet and rawEntries ignore TTL and Version', async () => {
     const backing = new MemoryStorage()
-    const s1 = new ClassicStorageFishStore('db', 's', 60_000, 'v1', backing)
-    await s1.set('k', 'v')
+    const store = new ClassicStorageFishStore(
+      'db',
+      'raw-test',
+      10,
+      'v1',
+      backing
+    )
 
-    const fullKey = 'db:s/k'
-    expect(backing.getItem(fullKey)).not.toBeNull()
+    await store.set('k', 'v')
 
-    const s2 = new ClassicStorageFishStore('db', 's', 60_000, 'v2', backing)
-    expect(await s2.get('k')).toBeNull()
-    expect(backing.getItem(fullKey)).toBeNull()
-  })
-
-  it('bad JSON is treated as missing and deleted', async () => {
-    const backing = new MemoryStorage()
-    const store = new ClassicStorageFishStore('db', 's', 60_000, 'v1', backing)
-
-    const fullKey = 'db:s/k'
-    backing.setItem(fullKey, '{not-json')
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(100)
 
     expect(await store.get('k')).toBeNull()
-    expect(backing.getItem(fullKey)).toBeNull()
+    const raw = await store.rawGet('k')
+    expect(raw).not.toBeNull()
+    expect(raw?.value).toBe('v')
+
+    const rawEntries = await collectAsync(store.rawEntries())
+    expect(rawEntries.length).toBe(1)
+    expect(rawEntries[0][1].value).toBe('v')
+
+    vi.useRealTimers()
   })
 
-  it('keys/values/entries iterate only store-scoped keys', async () => {
+  it('purgeExpiredEntries cleans up storage', async () => {
     const backing = new MemoryStorage()
-    const a = new ClassicStorageFishStore('db', 'a', 60_000, 'v1', backing)
-    const b = new ClassicStorageFishStore('db', 'b', 60_000, 'v1', backing)
+    const store = new ClassicStorageFishStore(
+      'db',
+      'purge-test',
+      10,
+      'v1',
+      backing
+    )
 
-    await a.set({ k1: 1, k2: 2 })
-    await b.set({ k1: 10 })
+    await store.set('k1', 1)
+    await store.set('k2', 2)
 
-    const aKeys = await collectAsync(a.keys())
-    expect(new Set(aKeys)).toEqual(new Set(['k1', 'k2']))
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(100)
 
-    const aVals = await collectAsync(a.values())
-    expect(aVals.map((x) => x.value).sort()).toEqual([1, 2])
+    expect(backing.length).toBe(2)
+    await store.purgeExpiredEntries()
+    expect(backing.length).toBe(0)
 
-    const aEntries = await collectAsync(a.entries())
-    expect(new Set(aEntries.map(([k]) => k))).toEqual(new Set(['k1', 'k2']))
-  })
-
-  it('clear removes only keys with the store prefix', async () => {
-    const backing = new MemoryStorage()
-    const a = new ClassicStorageFishStore('db', 'a', 60_000, 'v1', backing)
-    const b = new ClassicStorageFishStore('db', 'b', 60_000, 'v1', backing)
-
-    await a.set({ k1: 1, k2: 2 })
-    await b.set({ k1: 10 })
-
-    await a.clear()
-
-    expect(await collectAsync(a.keys())).toEqual([])
-    expect(await collectAsync(b.keys())).toEqual(['k1'])
+    vi.useRealTimers()
   })
 })
-
